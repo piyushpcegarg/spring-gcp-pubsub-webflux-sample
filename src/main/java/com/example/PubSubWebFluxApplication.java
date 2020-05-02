@@ -56,7 +56,6 @@ public class PubSubWebFluxApplication {
 	@ServiceActivator(inputChannel = "pubSubOutputChannel")
 	public MessageHandler messageSender(PubSubTemplate pubSubTemplate) {
 		PubSubMessageHandler handler = new PubSubMessageHandler(pubSubTemplate, TOPIC_NAME);
-		handler.setSync(true);
 		handler.setPublishCallback(new ListenableFutureCallback<>() {
 			@Override
 			public void onFailure(Throwable ex) {
