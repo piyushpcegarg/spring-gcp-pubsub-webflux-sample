@@ -1,6 +1,7 @@
 package com.example;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.aopalliance.aop.Advice;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.SpringApplication;
@@ -13,11 +14,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.dsl.MessageChannels;
+import org.springframework.integration.handler.advice.ExpressionEvaluatingRequestHandlerAdvice;
 import org.springframework.integration.http.inbound.RequestMapping;
 import org.springframework.integration.webflux.inbound.WebFluxInboundEndpoint;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
-import org.springframework.util.concurrent.ListenableFutureCallback;
 
 /**
  * Entry point into the sample application.
@@ -48,26 +49,28 @@ public class PubSubWebFluxApplication {
 		return MessageChannels.flux().get();
 	}
 
+	@Bean
+	public MessageChannel replyChannel() {
+		return MessageChannels.flux().get();
+	}
+
+	@Bean
+	public MessageChannel errorChannel() {
+		return MessageChannels.flux().get();
+	}
+
 	/**
 	 * Message handler which will consume messages from message channel.
 	 * Then it will send google cloud pubsub topic.
 	 */
 	@Bean
-	@ServiceActivator(inputChannel = "pubSubOutputChannel")
+	@ServiceActivator(
+			inputChannel = "pubSubOutputChannel",
+			adviceChain = "expressionAdvice"
+	)
 	public MessageHandler messageSender(PubSubTemplate pubSubTemplate) {
 		PubSubMessageHandler handler = new PubSubMessageHandler(pubSubTemplate, TOPIC_NAME);
-		handler.setPublishCallback(new ListenableFutureCallback<>() {
-			@Override
-			public void onFailure(Throwable ex) {
-				LOGGER.info("There was an error sending the message.");
-			}
-
-			@Override
-			public void onSuccess(String result) {
-				LOGGER.info("Message was sent successfully.");
-			}
-		});
-
+		handler.setSync(true);
 		return handler;
 	}
 
@@ -86,7 +89,17 @@ public class PubSubWebFluxApplication {
 		endpoint.setRequestMapping(requestMapping);
 
 		endpoint.setRequestChannel(pubSubOutputChannel());
+		endpoint.setReplyChannel(replyChannel());
+		endpoint.setErrorChannel(errorChannel());
 
 		return endpoint;
+	}
+
+	@Bean
+	public Advice expressionAdvice() {
+		ExpressionEvaluatingRequestHandlerAdvice advice = new ExpressionEvaluatingRequestHandlerAdvice();
+		advice.setSuccessChannel(replyChannel());
+		advice.setFailureChannel(errorChannel());
+		return advice;
 	}
 }
