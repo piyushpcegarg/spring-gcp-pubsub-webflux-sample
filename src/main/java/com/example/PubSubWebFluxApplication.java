@@ -14,7 +14,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.dsl.MessageChannels;
-import org.springframework.integration.handler.advice.ExpressionEvaluatingRequestHandlerAdvice;
 import org.springframework.integration.http.inbound.RequestMapping;
 import org.springframework.integration.webflux.inbound.WebFluxInboundEndpoint;
 import org.springframework.messaging.MessageChannel;
@@ -49,16 +48,6 @@ public class PubSubWebFluxApplication {
 		return MessageChannels.flux().get();
 	}
 
-	@Bean
-	public MessageChannel replyChannel() {
-		return MessageChannels.flux().get();
-	}
-
-	@Bean
-	public MessageChannel errorChannel() {
-		return MessageChannels.flux().get();
-	}
-
 	/**
 	 * Message handler which will consume messages from message channel.
 	 * Then it will send google cloud pubsub topic.
@@ -66,7 +55,7 @@ public class PubSubWebFluxApplication {
 	@Bean
 	@ServiceActivator(
 			inputChannel = "pubSubOutputChannel",
-			adviceChain = "expressionAdvice"
+			adviceChain = "pubSubAdvice"
 	)
 	public MessageHandler messageSender(PubSubTemplate pubSubTemplate) {
 		PubSubMessageHandler handler = new PubSubMessageHandler(pubSubTemplate, TOPIC_NAME);
@@ -89,17 +78,13 @@ public class PubSubWebFluxApplication {
 		endpoint.setRequestMapping(requestMapping);
 
 		endpoint.setRequestChannel(pubSubOutputChannel());
-		endpoint.setReplyChannel(replyChannel());
-		endpoint.setErrorChannel(errorChannel());
 
 		return endpoint;
 	}
 
 	@Bean
-	public Advice expressionAdvice() {
-		ExpressionEvaluatingRequestHandlerAdvice advice = new ExpressionEvaluatingRequestHandlerAdvice();
-		advice.setSuccessChannel(replyChannel());
-		advice.setFailureChannel(errorChannel());
-		return advice;
+	public Advice pubSubAdvice() {
+		return new PubSubRequestHandlerAdvice();
 	}
+
 }
